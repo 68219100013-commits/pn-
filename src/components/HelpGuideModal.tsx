@@ -1,6 +1,6 @@
 import React from 'react';
 import { sounds } from '../utils/audio';
-import { X, CheckCircle2, Sparkles, Sprout, Droplets, BookOpen, Trophy } from 'lucide-react';
+import { X, CheckCircle2, Sparkles, Sprout, Droplets, BookOpen, Trophy, Swords, Home, FlaskConical, Map } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HelpGuideModalProps {
@@ -18,26 +18,28 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose 
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-5 sm:p-6 shadow-[0_8px_0_0_rgba(28,25,23,1)] border-2 border-stone-900 relative space-y-4"
+          className="bg-white rounded-3xl max-w-xl w-full max-h-[85vh] overflow-y-auto p-5 sm:p-6 shadow-[0_8px_0_0_rgba(28,25,23,1)] border-2 border-stone-900 relative space-y-4"
         >
           <button
             onClick={() => {
               sounds.playPop();
               onClose();
             }}
-            className="absolute top-4 right-4 p-2 rounded-xl border border-stone-300 text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-xl border border-stone-300 text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5 stroke-[2.5]" />
           </button>
 
           <div className="flex items-center gap-2.5">
-            <span className="text-3xl">📖</span>
+            <span className="text-3xl">🧙‍♂️</span>
             <div>
               <h3 className="font-black text-base sm:text-lg text-stone-950 uppercase tracking-tight">
-                คู่มือการเล่นเกมเกษตรกรอัจฉริยะ (EcoFarm Guide)
+                คู่มือนักผจญภัยพฤกษาศาสตร์ (EcoQuest RPG Guide)
               </h3>
-              <p className="text-xs font-bold text-emerald-800">เรียนรู้วงจรการทำฟาร์มและการศึกษาอย่างสนุกสนาน</p>
+              <p className="text-xs font-bold text-emerald-800">
+                เรียนรู้ระบบการเล่น RPG การต่อสู้ ดันเจี้ยน การปรุงยา และการทำฟาร์ม
+              </p>
             </div>
           </div>
 
@@ -48,22 +50,28 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose 
                 1
               </span>
               <div>
-                <strong className="text-stone-950 text-xs font-black uppercase">ทำตามภารกิจแนะนำ (Mission System)</strong>
+                <strong className="text-stone-950 text-xs font-black uppercase flex items-center gap-1">
+                  <Map className="w-3.5 h-3.5 text-emerald-700" />
+                  แผนที่โลก & เควสต์กิลด์ (World Map & NPC Quests)
+                </strong>
                 <p className="text-[11px] font-medium text-stone-700 mt-0.5 leading-relaxed">
-                  แถบภารกิจด้านบนจะคอยแนะนำขั้นตอนทีละ Step เช่น หาน้ำ 2 ถัง, เพาะเมล็ด, รดน้ำต้นกล้า ทำตามและกดรับรางวัล EXP และเหรียญทอง
+                  รับภารกิจจากผู้เฒ่าอารอน, นายพรานการ์รอน และนักปรุงยาเอลฟ์ลิลลี่ ออกสำรวจป่ากระซิบ ถ้ำโบราณ และหุบเขาอัคนี
                 </p>
               </div>
             </div>
 
             {/* Step 2 */}
-            <div className="p-3.5 bg-sky-50 rounded-2xl border-2 border-sky-300 flex items-start gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-sky-600 border border-sky-800 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">
+            <div className="p-3.5 bg-rose-50 rounded-2xl border-2 border-rose-300 flex items-start gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-rose-600 border border-rose-800 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">
                 2
               </span>
               <div>
-                <strong className="text-stone-950 text-xs font-black uppercase">เล่นมินิเกมเก็บทรัพยากร (Mini-Games)</strong>
+                <strong className="text-stone-950 text-xs font-black uppercase flex items-center gap-1">
+                  <Swords className="w-3.5 h-3.5 text-rose-600" />
+                  ระบบต่อสู้ Timing Attack & เวทวิทยาศาสตร์ธาตุ
+                </strong>
                 <p className="text-[11px] font-medium text-stone-700 mt-0.5 leading-relaxed">
-                  ไปที่หน้า <strong>มินิเกม</strong> เพื่อเล่นจับหยดน้ำสายฝน 💧, ตอบควิซสังเคราะห์แสง 🧠, คำนวณสูตรปุ๋ย 🧪 หรือกำจัดศัตรูพืช 🐞
+                  กดจังหวะในแถบ Critical สีเขียวเพื่อทำดาเมจ 2.5 เท่า หรือตอบคำถามควิซชีวภาพ/ธาตุเพื่อร่ายเวทแพ้ทางทำดาเมจ 3 เท่า!
                 </p>
               </div>
             </div>
@@ -74,9 +82,12 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose 
                 3
               </span>
               <div>
-                <strong className="text-stone-950 text-xs font-black uppercase">ปลูกและดูแลพืช 4 ระยะ (4 Growth Stages)</strong>
+                <strong className="text-stone-950 text-xs font-black uppercase flex items-center gap-1">
+                  <span>🗝️</span>
+                  ดันเจี้ยนปริศนาเข็นบล็อก & ถอดรหัสโบราณ
+                </strong>
                 <p className="text-[11px] font-medium text-stone-700 mt-0.5 leading-relaxed">
-                  หยอดเมล็ด 🌰 ➔ ต้นกล้า 🌱 ➔ ต้นไม้เติบโต/ออกดอก 🌿 ➔ ผลผลิตสุกพร้อมเก็บเกี่ยว 🍅 คอยรดน้ำและใส่ปุ๋ย NPK ให้เหมาะสม
+                  เข็นหินรูนทับแท่นพลังงานเพื่อเปิดประตูกล แล้วตอบรหัสวิทยาศาสตร์เพื่อปลดล็อกหีบสมบัติเมล็ดพันธุ์ในตำนาน!
                 </p>
               </div>
             </div>
@@ -87,9 +98,12 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose 
                 4
               </span>
               <div>
-                <strong className="text-stone-950 text-xs font-black uppercase">เก็บเกี่ยวและสะสมเหรียญรางวัล (Harvest & Badges)</strong>
+                <strong className="text-stone-950 text-xs font-black uppercase flex items-center gap-1">
+                  <Home className="w-3.5 h-3.5 text-purple-700" />
+                  สร้างฐานค่ายพัก & ห้องปรุงยา (Camp & Alchemy)
+                </strong>
                 <p className="text-[11px] font-medium text-stone-700 mt-0.5 leading-relaxed">
-                  เก็บเกี่ยวเพื่อรับ EXP และเหรียญทอง นำไปขายในร้านค้า ปลดล็อกแปลงใหม่ พืชชนิดใหม่ และเหรียญตราเกียรติยศ!
+                  อัปเกรดเต็นท์เป็นกระท่อมไม้เพื่อรับบัฟ Max HP และความเร็วในการปลูกพืช นำผลผลิตและชิ้นส่วนมอนสเตอร์มาปรุงเป็นโพชั่น
                 </p>
               </div>
             </div>
@@ -101,9 +115,9 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose 
                 sounds.playPop();
                 onClose();
               }}
-              className="w-full cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3 rounded-2xl border-2 border-stone-900 shadow-[0_3px_0_0_rgba(28,25,23,1)] transition-colors active:scale-95"
+              className="w-full cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3 rounded-2xl border-2 border-stone-900 shadow-[0_3px_0_0_rgba(28,25,23,1)] transition-colors active:scale-95 uppercase tracking-wide"
             >
-              เข้าใจแล้ว เริ่มสนุกได้เลย! 🧑‍🌾
+              เข้าใจแล้ว เริ่มการผจญภัยได้เลย! ⚔️
             </button>
           </div>
         </motion.div>

@@ -1,314 +1,535 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActiveTab,
-  Badge,
+  AlchemyRecipe,
+  DungeonRoom,
   FarmPlot,
+  HeroStats,
+  InGameTime,
   Inventory,
-  Mission,
-  PlayerStats,
+  Monster,
+  NPCQuest,
   ToastMessage,
+  WeatherState,
+  WeatherType,
+  WorldLocation,
 } from './types';
-import { CROPS_DATA, INITIAL_BADGES, INITIAL_MISSIONS } from './data/gameData';
+import {
+  ALCHEMY_RECIPES,
+  CROPS_DATA,
+  DUNGEON_ROOMS,
+  NPC_QUESTS,
+  WORLD_LOCATIONS,
+  MONSTERS_DATA,
+  CAMP_UPGRADES,
+} from './data/gameData';
+import { WEATHER_CONFIGS, getTimeOfDay } from './data/weatherData';
 import { Header } from './components/Header';
-import { MissionTracker } from './components/MissionTracker';
-import { FarmPlotCard } from './components/FarmPlotCard';
-import { PlotModal } from './components/PlotModal';
-import { MiniGamesHub } from './components/minigames/MiniGamesHub';
+import { WorldMapView } from './components/WorldMapView';
+import { BattleView } from './components/BattleView';
+import { DungeonPuzzleView } from './components/DungeonPuzzleView';
+import { CampView } from './components/CampView';
+import { AlchemyView } from './components/AlchemyView';
+import { QuestGuildView } from './components/QuestGuildView';
+import { CodexView } from './components/CodexView';
 import { ShopView } from './components/ShopView';
-import { EncyclopediaView } from './components/EncyclopediaView';
-import { BadgesView } from './components/BadgesView';
+import { MiniGamesHub } from './components/minigames/MiniGamesHub';
+import { PlotModal } from './components/PlotModal';
 import { LevelUpModal } from './components/LevelUpModal';
 import { HelpGuideModal } from './components/HelpGuideModal';
+import { WeatherOverlay } from './components/WeatherOverlay';
 import { ToastContainer } from './components/Toast';
 import { sounds } from './utils/audio';
 import confetti from 'canvas-confetti';
-import { Sprout, Gamepad2, Store, BookOpen, Award, Sparkles, Droplets, FlaskConical } from 'lucide-react';
+import {
+  Map,
+  Home,
+  Scroll,
+  FlaskConical,
+  BookOpen,
+  ShoppingBag,
+  Gamepad2,
+} from 'lucide-react';
 
-const STORAGE_KEY = 'ecofarm_game_save_v1';
+export function App() {
+  // Navigation
+  const [activeTab, setActiveTab] = useState<ActiveTab>('camp');
 
-export default function App() {
-  // 1. Initial State
-  const [stats, setStats] = useState<PlayerStats>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.stats) return parsed.stats;
+  // RPG Hero Stats
+  const [hero, setHero] = useState<HeroStats>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_hero');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse hero data', e);
       }
-    } catch {}
+    }
     return {
       level: 1,
       exp: 0,
       maxExp: 100,
-      coins: 50,
-      playerName: 'เกษตรกรน้อย',
+      hp: 100,
+      maxHp: 100,
+      stamina: 50,
+      maxStamina: 50,
+      atk: 18,
+      def: 6,
+      title: 'นักผจญภัยฝึกหัด (Novice Adventurer)',
+      coins: 80,
+      manaCrystals: 5,
+      playerName: 'เรย์ (Ray)',
+      campLevel: 1,
+      totalMonstersDefeated: 0,
+      totalBattlesWon: 0,
+      totalDungeonsCleared: 0,
+      totalPotionsBrewed: 0,
       totalHarvests: 0,
       totalQuizzesCorrect: 0,
-      totalWaterCollected: 0,
-      totalFertilizersCrafted: 0,
-      totalPestsCleared: 0,
-      gameTimeDays: 1,
+      discoveredCards: ['card_photosynthesis', 'card_npk_chemistry'],
+      currentLocationId: 'oasis_village',
     };
   });
 
-  const [plots, setPlots] = useState<FarmPlot[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.plots) return parsed.plots;
+  // RPG Inventory
+  const [inventory, setInventory] = useState<Inventory>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_inventory');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse inventory data', e);
       }
-    } catch {}
+    }
+    return {
+      seeds: {
+        morning_glory: 4,
+        tomato: 2,
+        corn: 1,
+      },
+      harvested: {},
+      waterBuckets: 8,
+      fertilizerOrganic: 4,
+      fertilizerN: 2,
+      fertilizerP: 2,
+      fertilizerK: 2,
+      pestSprays: 3,
+      potions: {
+        hp_small: 3,
+        hp_large: 1,
+        stamina_elixir: 1,
+        antidote: 2,
+        fire_bomb: 2,
+        water_splash: 2,
+      },
+      materials: {
+        magic_wood: 4,
+        runestone: 2,
+        monster_essence: 1,
+        star_dust: 0,
+        fire_core: 0,
+        ancient_gear: 0,
+      },
+    };
+  });
+
+  // Farm Plots
+  const [plots, setPlots] = useState<FarmPlot[]>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_plots');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse plot data', e);
+      }
+    }
     return [
-      { id: 0, isUnlocked: true, unlockLevel: 1, cropId: null, stage: 0, growthProgress: 0, waterLevel: 60, fertilizerLevel: 40, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
-      { id: 1, isUnlocked: true, unlockLevel: 1, cropId: null, stage: 0, growthProgress: 0, waterLevel: 60, fertilizerLevel: 40, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
-      { id: 2, isUnlocked: true, unlockLevel: 1, cropId: null, stage: 0, growthProgress: 0, waterLevel: 60, fertilizerLevel: 40, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
-      { id: 3, isUnlocked: true, unlockLevel: 1, cropId: null, stage: 0, growthProgress: 0, waterLevel: 60, fertilizerLevel: 40, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
-      { id: 4, isUnlocked: false, unlockLevel: 2, cropId: null, stage: 0, growthProgress: 0, waterLevel: 0, fertilizerLevel: 0, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
-      { id: 5, isUnlocked: false, unlockLevel: 3, cropId: null, stage: 0, growthProgress: 0, waterLevel: 0, fertilizerLevel: 0, hasPest: false, plantedAt: null, lastCareAt: Date.now() },
+      {
+        id: 0,
+        isUnlocked: true,
+        unlockLevel: 1,
+        cropId: 'morning_glory',
+        stage: 2,
+        growthProgress: 60,
+        waterLevel: 80,
+        fertilizerLevel: 70,
+        hasPest: false,
+        isTilled: true,
+        plantedAt: Date.now() - 5000,
+        lastCareAt: Date.now(),
+      },
+      {
+        id: 1,
+        isUnlocked: true,
+        unlockLevel: 1,
+        cropId: null,
+        stage: 0,
+        growthProgress: 0,
+        waterLevel: 60,
+        fertilizerLevel: 40,
+        hasPest: false,
+        isTilled: false,
+        plantedAt: null,
+        lastCareAt: Date.now(),
+      },
+      {
+        id: 2,
+        isUnlocked: true,
+        unlockLevel: 1,
+        cropId: null,
+        stage: 0,
+        growthProgress: 0,
+        waterLevel: 50,
+        fertilizerLevel: 30,
+        hasPest: false,
+        isTilled: false,
+        plantedAt: null,
+        lastCareAt: Date.now(),
+      },
+      {
+        id: 3,
+        isUnlocked: true,
+        unlockLevel: 1,
+        cropId: null,
+        stage: 0,
+        growthProgress: 0,
+        waterLevel: 50,
+        fertilizerLevel: 30,
+        hasPest: false,
+        isTilled: false,
+        plantedAt: null,
+        lastCareAt: Date.now(),
+      },
+      {
+        id: 4,
+        isUnlocked: true,
+        unlockLevel: 2,
+        cropId: null,
+        stage: 0,
+        growthProgress: 0,
+        waterLevel: 40,
+        fertilizerLevel: 20,
+        hasPest: false,
+        isTilled: false,
+        plantedAt: null,
+        lastCareAt: Date.now(),
+      },
+      {
+        id: 5,
+        isUnlocked: false,
+        unlockLevel: 3,
+        cropId: null,
+        stage: 0,
+        growthProgress: 0,
+        waterLevel: 0,
+        fertilizerLevel: 0,
+        hasPest: false,
+        isTilled: false,
+        plantedAt: null,
+        lastCareAt: Date.now(),
+      },
     ];
   });
 
-  const [inventory, setInventory] = useState<Inventory>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.inventory) return parsed.inventory;
+  // NPC Quests
+  const [quests, setQuests] = useState<NPCQuest[]>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_quests');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse quests', e);
       }
-    } catch {}
-    return {
-      seeds: {
-        morning_glory: 2,
-        tomato: 1,
-      },
-      harvested: {},
-      waterBuckets: 0, // Starts at 0 to motivate playing the first mini-game mission!
-      fertilizerOrganic: 1,
-      fertilizerN: 0,
-      fertilizerP: 0,
-      fertilizerK: 0,
-      pestSprays: 1,
-    };
+    }
+    return NPC_QUESTS;
   });
 
-  const [missions, setMissions] = useState<Mission[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.missions) return parsed.missions;
-      }
-    } catch {}
-    return INITIAL_MISSIONS;
-  });
+  // Active Combat / Dungeon Selection
+  const [selectedMonsterId, setSelectedMonsterId] = useState<string>('forest_slime');
+  const [selectedDungeonId, setSelectedDungeonId] = useState<string>('ruin_chamber_1');
 
-  const [badges, setBadges] = useState<Badge[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.badges) return parsed.badges;
-      }
-    } catch {}
-    return INITIAL_BADGES;
-  });
-
-  // UI state
-  const [activeTab, setActiveTab] = useState<ActiveTab>('farm');
+  // Modals & UI States
   const [selectedPlot, setSelectedPlot] = useState<FarmPlot | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [levelUpModal, setLevelUpModal] = useState<{
-    level: number;
-    rewardCoins: number;
-    unlockedItemName?: string;
-  } | null>(null);
+  const [levelUpModal, setLevelUpModal] = useState<{ level: number; rewardCoins: number; unlockedItemName: string } | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
 
-  // Toast helper
-  const addToast = (title: string, description?: string, type: 'success' | 'info' | 'warning' | 'achievement' = 'success') => {
-    const id = Date.now().toString() + Math.random().toString();
-    setToasts((prev) => [...prev.slice(-3), { id, title, description, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
+  // In-Game Time & Dynamic Weather System
+  const [inGameTime, setInGameTime] = useState<InGameTime>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_time');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse inGameTime', e);
+      }
+    }
+    return { day: 1, hours: 8, minutes: 30, timeOfDay: 'morning' };
+  });
+
+  const [weatherType, setWeatherType] = useState<WeatherType>(() => {
+    const saved = localStorage.getItem('ecoquest_rpg_weather');
+    if (saved && saved in WEATHER_CONFIGS) {
+      return saved as WeatherType;
+    }
+    return 'sunny';
+  });
+
+  const currentWeather = WEATHER_CONFIGS[weatherType] || WEATHER_CONFIGS['sunny'];
+
+  // Sync to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_hero', JSON.stringify(hero));
+  }, [hero]);
+
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_inventory', JSON.stringify(inventory));
+  }, [inventory]);
+
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_plots', JSON.stringify(plots));
+  }, [plots]);
+
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_quests', JSON.stringify(quests));
+  }, [quests]);
+
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_time', JSON.stringify(inGameTime));
+  }, [inGameTime]);
+
+  useEffect(() => {
+    localStorage.setItem('ecoquest_rpg_weather', weatherType);
+  }, [weatherType]);
+
+  // Toast Helper
+  const addToast = (title: string, description?: string, type: ToastMessage['type'] = 'info', icon?: string) => {
+    const newToast: ToastMessage = {
+      id: `${Date.now()}_${Math.random()}`,
+      title,
+      description,
+      type,
+      icon,
+    };
+    setToasts((prev) => [newToast, ...prev.slice(0, 4)]);
   };
 
-  // Save to LocalStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ stats, plots, inventory, missions, badges })
-      );
-    } catch {}
-  }, [stats, plots, inventory, missions, badges]);
-
-  // Check plot unlocks upon level change
-  useEffect(() => {
-    setPlots((prev) =>
-      prev.map((plot) => {
-        if (!plot.isUnlocked && stats.level >= plot.unlockLevel) {
-          return { ...plot, isUnlocked: true, waterLevel: 60, fertilizerLevel: 30 };
+  // Quest Tracker
+  const updateQuestProgress = (type: NPCQuest['taskType'], amount = 1) => {
+    setQuests((prev) =>
+      prev.map((q) => {
+        if (q.taskType === type && !q.isCompleted) {
+          const nextCount = q.currentCount + amount;
+          const completed = nextCount >= q.targetCount;
+          if (completed && !q.isCompleted) {
+            sounds.playQuestComplete();
+            addToast(`📜 ภารกิจสำเร็จ: ${q.title}!`, 'รับรางวัลที่กิลด์นักผจญภัยได้แล้ว!', 'achievement');
+          }
+          return {
+            ...q,
+            currentCount: Math.min(q.targetCount, nextCount),
+            isCompleted: completed,
+          };
         }
-        return plot;
+        return q;
       })
     );
-  }, [stats.level]);
+  };
 
-  // EXP & Level Progression System
+  // Hero Experience & Level-Up
   const addExp = (amount: number) => {
-    setStats((prev) => {
-      let newExp = prev.exp + amount;
-      let newLevel = prev.level;
-      let newMaxExp = prev.maxExp;
+    setHero((prev) => {
+      let currentExp = prev.exp + amount;
+      let currentLevel = prev.level;
+      let maxExp = prev.maxExp;
+      let currentMaxHp = prev.maxHp;
+      let currentAtk = prev.atk;
+      let currentCoins = prev.coins;
+
       let leveledUp = false;
-      let bonusCoins = 0;
       let unlockedName = '';
 
-      while (newExp >= newMaxExp) {
-        newExp -= newMaxExp;
-        newLevel += 1;
-        newMaxExp = Math.round(newMaxExp * 1.4);
+      while (currentExp >= maxExp) {
+        currentExp -= maxExp;
+        currentLevel += 1;
+        maxExp = Math.round(maxExp * 1.45);
+        currentMaxHp += 25;
+        currentAtk += 4;
+        currentCoins += currentLevel * 50;
         leveledUp = true;
-        bonusCoins += newLevel * 50;
 
-        if (newLevel === 2) unlockedName = 'ข้าวโพดหวาน 🌽 & แครอท 🥕 & แปลงที่ 5';
-        else if (newLevel === 3) unlockedName = 'ทานตะวัน 🌻 & แปลงที่ 6';
-        else if (newLevel === 4) unlockedName = 'สตรอว์เบอร์รีหวานฉ่ำ 🍓';
-        else if (newLevel === 5) unlockedName = 'ข้าวหอมมะลิอินทรีย์ 🌾';
+        if (currentLevel === 2) unlockedName = 'ข้าวโพดหวาน, แครอท & ยาถอนพิษ';
+        else if (currentLevel === 3) unlockedName = 'ทานตะวัน, โสมเวทมนตร์ & ระเบิดเพลิง';
+        else if (currentLevel === 4) unlockedName = 'สตรอว์เบอร์รี & น้ำทิพย์ฟื้นฟูมานา';
+        else if (currentLevel === 5) unlockedName = 'ดอกบัวดวงดาว & ดันเจี้ยนหุบเขาเพลิง';
+        else unlockedName = `ทักษะขั้นสูงระดับ Lv.${currentLevel}`;
       }
 
       if (leveledUp) {
         sounds.playLevelUp();
-        confetti({
-          particleCount: 80,
-          spread: 80,
-          origin: { y: 0.4 },
-        });
+        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
         setLevelUpModal({
-          level: newLevel,
-          rewardCoins: bonusCoins,
+          level: currentLevel,
+          rewardCoins: currentLevel * 50,
           unlockedItemName: unlockedName,
         });
 
-        // Trigger level reach mission
-        updateMissionProgress('reach_level', 1);
-
-        return {
-          ...prev,
-          level: newLevel,
-          exp: newExp,
-          maxExp: newMaxExp,
-          coins: prev.coins + bonusCoins,
-        };
+        // Unlock farm plots for new level
+        setPlots((prevPlots) =>
+          prevPlots.map((plot) =>
+            plot.unlockLevel <= currentLevel ? { ...plot, isUnlocked: true } : plot
+          )
+        );
       }
 
-      return { ...prev, exp: newExp };
+      return {
+        ...prev,
+        level: currentLevel,
+        exp: currentExp,
+        maxExp,
+        maxHp: currentMaxHp,
+        hp: leveledUp ? currentMaxHp : prev.hp,
+        atk: currentAtk,
+        coins: currentCoins,
+      };
     });
   };
 
-  // Mission Progress Evaluator
-  const updateMissionProgress = (type: Mission['type'], amount: number) => {
-    setMissions((prev) =>
-      prev.map((mission) => {
-        if (mission.type === type && !mission.isCompleted) {
-          const nextAmount = mission.currentAmount + amount;
-          const isCompleted = nextAmount >= mission.targetAmount;
-          if (isCompleted) {
-            sounds.playLevelUp();
-            addToast('🎉 ภารกิจสำเร็จ!', `สำเร็จ: ${mission.title}`, 'achievement');
-          }
-          return {
-            ...mission,
-            currentAmount: nextAmount,
-            isCompleted,
-          };
-        }
-        return mission;
-      })
-    );
-  };
-
-  // Badge Progress Evaluator
-  const updateBadgeProgress = (badgeId: string, amount: number) => {
-    setBadges((prev) =>
-      prev.map((badge) => {
-        if (badge.id === badgeId && !badge.isUnlocked) {
-          const nextCurrent = badge.current + amount;
-          const isUnlocked = nextCurrent >= badge.target;
-          if (isUnlocked) {
-            sounds.playLevelUp();
-            addToast(`🏆 ปลดล็อกเหรียญตรา: ${badge.title}`, badge.description, 'achievement');
-          }
-          return {
-            ...badge,
-            current: nextCurrent,
-            isUnlocked,
-            unlockedAt: isUnlocked ? Date.now() : undefined,
-          };
-        }
-        return badge;
-      })
-    );
-  };
-
-  // 2. Main Game Engine (1-second tick loop for crop growth & moisture consumption)
+  // In-Game Clock & Weather Progression (every 2.5s = +5 in-game minutes)
   useEffect(() => {
+    const clockInterval = setInterval(() => {
+      setInGameTime((prevTime) => {
+        let newMinutes = prevTime.minutes + 5;
+        let newHours = prevTime.hours;
+        let newDay = prevTime.day;
+
+        if (newMinutes >= 60) {
+          newMinutes = newMinutes % 60;
+          newHours += 1;
+        }
+
+        if (newHours >= 24) {
+          newHours = 0;
+          newDay += 1;
+        }
+
+        const newTimeOfDay = getTimeOfDay(newHours);
+
+        return {
+          day: newDay,
+          hours: newHours,
+          minutes: newMinutes,
+          timeOfDay: newTimeOfDay,
+        };
+      });
+    }, 2500);
+
+    return () => clearInterval(clockInterval);
+  }, []);
+
+  // Weather Rotation (natural transitions based on time of day)
+  useEffect(() => {
+    const weatherInterval = setInterval(() => {
+      // 35% chance of weather shifting periodically
+      if (Math.random() < 0.35) {
+        const timeOfDay = inGameTime.timeOfDay;
+        let candidateWeathers: WeatherType[] = ['sunny', 'breeze', 'rainy'];
+
+        if (timeOfDay === 'night') {
+          candidateWeathers = ['moonlit', 'rainy', 'thunderstorm', 'breeze'];
+        } else if (timeOfDay === 'sunset') {
+          candidateWeathers = ['breeze', 'sunny', 'rainy'];
+        } else if (timeOfDay === 'morning' || timeOfDay === 'day') {
+          candidateWeathers = ['sunny', 'breeze', 'rainy', 'thunderstorm'];
+        }
+
+        const nextWeatherType = candidateWeathers[Math.floor(Math.random() * candidateWeathers.length)];
+        if (nextWeatherType !== weatherType) {
+          setWeatherType(nextWeatherType);
+          const nextWeatherConfig = WEATHER_CONFIGS[nextWeatherType];
+          sounds.playPop();
+          addToast(
+            `🌤️ สภาพอากาศเปลี่ยนเป็น: ${nextWeatherConfig.name} ${nextWeatherConfig.icon}`,
+            nextWeatherConfig.cropBuffDescription,
+            'info'
+          );
+        }
+      }
+    }, 45000); // Check every 45s
+
+    return () => clearInterval(weatherInterval);
+  }, [inGameTime.timeOfDay, weatherType]);
+
+  // Manual Weather Change Handler
+  const handleSetWeather = (type: WeatherType) => {
+    setWeatherType(type);
+    sounds.playPop();
+    const config = WEATHER_CONFIGS[type];
+    addToast(
+      `✨ ควบคุมสภาพอากาศ: ${config.name} ${config.icon}`,
+      config.cropBuffDescription,
+      'achievement'
+    );
+  };
+
+  // Plant Growth Loop (1-second tick with Camp bonus & Weather Effects)
+  useEffect(() => {
+    const campBonus = CAMP_UPGRADES.find((c) => c.level === hero.campLevel)?.growthSpeedBonus || 0;
+
     const interval = setInterval(() => {
       setPlots((prevPlots) =>
         prevPlots.map((plot) => {
-          if (!plot.isUnlocked || plot.stage === 0 || !plot.cropId) {
+          if (!plot.isUnlocked || !plot.cropId || plot.stage === 0 || plot.stage >= 4) {
             return plot;
           }
 
           const crop = CROPS_DATA[plot.cropId];
           if (!crop) return plot;
 
-          // If crop is already 100% harvestable (stage 4)
-          if (plot.growthProgress >= 100) {
-            return { ...plot, stage: 4 };
+          // Weather impact on water:
+          // Rain / Thunderstorm naturally waters plants
+          let nextWater = plot.waterLevel;
+          if (currentWeather.autoWaterRate > 0) {
+            nextWater = Math.min(100, nextWater + currentWeather.autoWaterRate);
+          } else {
+            // Evaporation affected by weather
+            const waterDecay = 0.6 * crop.waterDemand * currentWeather.waterEvaporationMultiplier;
+            nextWater = Math.max(0, nextWater - waterDecay);
           }
 
-          // Consume water & fertilizer
-          let nextWater = Math.max(0, plot.waterLevel - 0.45 * crop.waterDemand);
-          let nextFertilizer = Math.max(0, plot.fertilizerLevel - 0.3 * crop.fertilizerDemand);
+          // Growth calculation with weather multipliers
+          let growthRate = (100 / crop.growthDurationSeconds) * currentWeather.growthMultiplier;
 
-          // Growth step calculation
-          let growthIncrement = 0;
-          if (plot.waterLevel > 0) {
-            // Base growth per second
-            const baseGrowth = (100 / crop.growthDurationSeconds);
-            // Multiplier from fertilizer & moisture
-            const fertilizerMultiplier = plot.fertilizerLevel > 20 ? 1.4 : 1.0;
-            growthIncrement = baseGrowth * fertilizerMultiplier;
+          // Moonlit night bonus for magic crops
+          if (crop.category === 'magic' && currentWeather.type === 'moonlit') {
+            growthRate *= currentWeather.magicCropBonus;
           }
 
-          const nextProgress = Math.min(100, plot.growthProgress + growthIncrement);
+          if (plot.waterLevel < 20) growthRate *= 0.3; // Thirst penalty
+          if (plot.fertilizerLevel > 20) growthRate *= 1.35; // Fertilizer boost
+          if (plot.isTilled) growthRate *= 1.25; // Tilling bonus
+          if (campBonus > 0) growthRate *= 1 + campBonus / 100; // Camp cabin bonus
+          if (plot.hasPest) growthRate *= 0.2; // Pest debuff
 
-          // Determine 4-Stage
-          let nextStage: 1 | 2 | 3 | 4 = 1;
+          const nextProgress = Math.min(100, plot.growthProgress + growthRate);
+
+          let nextStage = plot.stage;
           if (nextProgress >= 100) nextStage = 4;
-          else if (nextProgress >= 60) nextStage = 3;
-          else if (nextProgress >= 25) nextStage = 2;
+          else if (nextProgress >= 66) nextStage = 3;
+          else if (nextProgress >= 33) nextStage = 2;
           else nextStage = 1;
 
-          // Sprout badge progress on reaching stage 2
-          if (plot.stage === 1 && nextStage === 2) {
-            updateBadgeProgress('first_sprout', 1);
-          }
-
-          // Occasional pest spawn (0.4% chance if in stage 2 or 3 and no pest)
+          // Random pest check (modulated by weather pestRisk)
           let nextPest = plot.hasPest;
-          if (!nextPest && (nextStage === 2 || nextStage === 3) && Math.random() < 0.005) {
+          if (!nextPest && nextStage >= 2 && nextStage < 4 && currentWeather.pestRisk > 0 && Math.random() < 0.008 * currentWeather.pestRisk) {
             nextPest = true;
+            addToast(`🐛 ศัตรูพืชบุกแปลงที่ ${plot.id + 1}!`, 'ใช้สเปรย์ชีวภาพกำจัดเพื่อไม่ให้ต้นไม้หยุดโต', 'warning');
           }
 
           return {
             ...plot,
             waterLevel: nextWater,
-            fertilizerLevel: nextFertilizer,
             growthProgress: nextProgress,
             stage: nextStage,
             hasPest: nextPest,
@@ -318,11 +539,305 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [hero.campLevel, currentWeather]);
 
-  // 3. Farming Actions
+  // World Map Navigation
+  const handleSelectLocation = (locId: string) => {
+    setHero((prev) => ({ ...prev, currentLocationId: locId }));
+    const location = WORLD_LOCATIONS[locId];
+    if (location) {
+      addToast(`🗺️ เดินทางสู่ ${location.thaiName}!`, location.description);
+    }
+  };
+
+  const handleStartBattle = (monsterId: string) => {
+    setSelectedMonsterId(monsterId);
+    setActiveTab('battle');
+    sounds.playPop();
+    const monster = MONSTERS_DATA[monsterId];
+    if (monster) {
+      addToast(`⚔️ เข้าสู่สมรภูมิ: ${monster.name}!`, 'โจมตีด้วยจังหวะ Timing Attack เพื่อทำความเสียหาย Critical!');
+    }
+  };
+
+  const handleEnterDungeon = (dungeonId: string) => {
+    setSelectedDungeonId(dungeonId);
+    setActiveTab('dungeon');
+    sounds.playChestOpen();
+    const dungeon = DUNGEON_ROOMS.find((d) => d.id === dungeonId);
+    if (dungeon) {
+      addToast(`🗝️ เข้าสู่ ${dungeon.title}!`, 'เข็นบล็อกหินรูนและตอบรหัสวิทยาศาสตร์เพื่อเปิดหีบสมบัติ');
+    }
+  };
+
+  // Battle Victory Callback
+  const handleBattleVictory = (rewards: {
+    exp: number;
+    gold: number;
+    crystals: number;
+    materials: Partial<Inventory['materials']>;
+    seeds: Record<string, number>;
+  }) => {
+    sounds.playLevelUp();
+    confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+
+    // Grant drop materials and seeds
+    setInventory((prev) => {
+      const nextSeeds = { ...prev.seeds };
+      if (rewards.seeds) {
+        Object.entries(rewards.seeds).forEach(([sid, count]) => {
+          nextSeeds[sid] = (nextSeeds[sid] || 0) + count;
+        });
+      }
+
+      const nextMaterials = { ...prev.materials };
+      if (rewards.materials) {
+        Object.entries(rewards.materials).forEach(([mid, count]) => {
+          const key = mid as keyof Inventory['materials'];
+          nextMaterials[key] = (nextMaterials[key] || 0) + (count || 0);
+        });
+      }
+
+      return {
+        ...prev,
+        seeds: nextSeeds,
+        materials: nextMaterials,
+      };
+    });
+
+    setHero((prev) => ({
+      ...prev,
+      coins: prev.coins + rewards.gold,
+      manaCrystals: prev.manaCrystals + rewards.crystals,
+      totalMonstersDefeated: (prev.totalMonstersDefeated || 0) + 1,
+      totalBattlesWon: (prev.totalBattlesWon || 0) + 1,
+    }));
+
+    addExp(rewards.exp);
+    updateQuestProgress('battle', 1);
+    addToast(
+      '🏆 ได้รับชัยชนะในการต่อสู้!',
+      `+${rewards.exp} EXP, +${rewards.gold} 🪙, +${rewards.crystals} 💎`,
+      'achievement'
+    );
+  };
+
+  // Potion Consumption
+  const handleUsePotion = (potionType: keyof Inventory['potions']) => {
+    if ((inventory.potions[potionType] || 0) <= 0) return;
+
+    sounds.playPotionBrew();
+    setInventory((prev) => ({
+      ...prev,
+      potions: {
+        ...prev.potions,
+        [potionType]: prev.potions[potionType] - 1,
+      },
+    }));
+
+    if (potionType === 'hp_small') {
+      setHero((prev) => ({ ...prev, hp: Math.min(prev.maxHp, prev.hp + 80) }));
+      addToast('💚 ฟื้นฟู HP +80!');
+    } else if (potionType === 'hp_large') {
+      setHero((prev) => ({ ...prev, hp: Math.min(prev.maxHp, prev.hp + 250) }));
+      addToast('💚 ฟื้นฟู HP +250!');
+    } else if (potionType === 'stamina_elixir') {
+      setHero((prev) => ({ ...prev, hp: Math.min(prev.maxHp, prev.hp + 100), atk: prev.atk + 5 }));
+      addToast('🪷 ฟื้นฟูมานา & บัฟ ATK +5!');
+    } else if (potionType === 'antidote') {
+      setHero((prev) => ({ ...prev, hp: Math.min(prev.maxHp, prev.hp + 50) }));
+      addToast('🌿 ล้างพิษ & ฟื้นฟู HP +50!');
+    }
+  };
+
+  // Dungeon Cleared
+  const handleDungeonCleared = (rewards: DungeonRoom['chestRewards']) => {
+    sounds.playChestOpen();
+    confetti({ particleCount: 80, spread: 80, origin: { y: 0.5 } });
+
+    setInventory((prev) => {
+      const nextSeeds = { ...prev.seeds };
+      if (rewards.rareSeed) {
+        nextSeeds[rewards.rareSeed.cropId] =
+          (nextSeeds[rewards.rareSeed.cropId] || 0) + rewards.rareSeed.count;
+      }
+
+      const nextMaterials = {
+        ...prev.materials,
+        runestone: prev.materials.runestone + (rewards.runestones || 0),
+        ancient_gear: prev.materials.ancient_gear + (rewards.ancientGear || 0),
+      };
+
+      return {
+        ...prev,
+        seeds: nextSeeds,
+        materials: nextMaterials,
+      };
+    });
+
+    setHero((prev) => ({
+      ...prev,
+      coins: prev.coins + rewards.gold,
+      manaCrystals: prev.manaCrystals + rewards.manaCrystals,
+      totalDungeonsCleared: prev.totalDungeonsCleared + 1,
+    }));
+
+    addExp(200);
+    updateQuestProgress('dungeon', 1);
+    addToast(
+      '🗝️ ไขปริศนาดันเจี้ยนสำเร็จ!',
+      `เปิดหีบโบราณ ได้รับ +200 EXP, +${rewards.gold} 🪙, +${rewards.manaCrystals} 💎`,
+      'achievement'
+    );
+  };
+
+  // Camp Bed Rest
+  const handleRestInBed = () => {
+    sounds.playLevelUp();
+    setHero((prev) => ({
+      ...prev,
+      hp: prev.maxHp,
+    }));
+    addToast('🛌 พักผ่อนเต็มอิ่ม!', 'ฟื้นฟูพลังชีวิต (HP) เต็ม 100% เรียบร้อยแล้ว!');
+  };
+
+  // Camp Upgrade
+  const handleUpgradeCamp = (targetLevel: number) => {
+    const upgradeInfo = CAMP_UPGRADES.find((c) => c.level === targetLevel);
+    if (!upgradeInfo) return;
+
+    if (
+      hero.coins < upgradeInfo.costGold ||
+      inventory.materials.magic_wood < upgradeInfo.costWood ||
+      inventory.materials.runestone < upgradeInfo.costRunestone
+    ) {
+      addToast('⚠️ ทรัพยากรไม่เพียงพอ!', 'สะสมเหรียญ ไม้เวทมนตร์ และหินรูนให้ครบ', 'warning');
+      return;
+    }
+
+    sounds.playLevelUp();
+    confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+
+    setInventory((prev) => ({
+      ...prev,
+      materials: {
+        ...prev.materials,
+        magic_wood: prev.materials.magic_wood - upgradeInfo.costWood,
+        runestone: prev.materials.runestone - upgradeInfo.costRunestone,
+      },
+    }));
+
+    setHero((prev) => ({
+      ...prev,
+      campLevel: targetLevel,
+      coins: prev.coins - upgradeInfo.costGold,
+      manaCrystals: Math.max(0, prev.manaCrystals - upgradeInfo.costCrystals),
+      maxHp: prev.maxHp + upgradeInfo.maxHpBonus,
+      hp: prev.maxHp + upgradeInfo.maxHpBonus,
+      atk: prev.atk + upgradeInfo.atkBonus,
+    }));
+
+    updateQuestProgress('upgrade_camp', 1);
+    addToast(
+      `🏕️ ยกระดับแคมป์เป็น: ${upgradeInfo.title}!`,
+      `เพิ่ม Max HP +${upgradeInfo.maxHpBonus}, ATK +${upgradeInfo.atkBonus}, พืชโตไวขึ้น +${upgradeInfo.growthSpeedBonus}%`,
+      'achievement'
+    );
+  };
+
+  // Alchemy Craft Recipe
+  const handleCraftRecipe = (recipe: AlchemyRecipe) => {
+    setInventory((prev) => {
+      let nextWater = prev.waterBuckets;
+      if (recipe.ingredients.waterCost) {
+        nextWater = Math.max(0, nextWater - recipe.ingredients.waterCost);
+      }
+
+      const nextHarvested = { ...prev.harvested };
+      if (recipe.ingredients.crops) {
+        recipe.ingredients.crops.forEach((req) => {
+          nextHarvested[req.cropId] = Math.max(0, (nextHarvested[req.cropId] || 0) - req.count);
+        });
+      }
+
+      const nextMaterials = { ...prev.materials };
+      if (recipe.ingredients.materials) {
+        recipe.ingredients.materials.forEach((req) => {
+          nextMaterials[req.material] = Math.max(0, (nextMaterials[req.material] || 0) - req.count);
+        });
+      }
+
+      const nextPotions = { ...prev.potions };
+      nextPotions[recipe.resultItem] = (nextPotions[recipe.resultItem] || 0) + recipe.resultCount;
+
+      return {
+        ...prev,
+        waterBuckets: nextWater,
+        harvested: nextHarvested,
+        materials: nextMaterials,
+        potions: nextPotions,
+      };
+    });
+
+    sounds.playPotionBrew();
+    setHero((prev) => ({
+      ...prev,
+      totalPotionsBrewed: prev.totalPotionsBrewed + recipe.resultCount,
+    }));
+
+    const expGain = recipe.expReward || 60;
+    addExp(expGain);
+    updateQuestProgress('alchemy', 1);
+    addToast('🧪 ปรุงยาสำเร็จ!', `สร้าง ${recipe.name} x${recipe.resultCount} ขวด (+${expGain} EXP)`);
+  };
+
+  // Quest Claim
+  const handleClaimQuest = (questId: string) => {
+    const q = quests.find((item) => item.id === questId);
+    if (!q || !q.isCompleted || q.isClaimed) return;
+
+    setQuests((prev) =>
+      prev.map((item) => (item.id === questId ? { ...item, isClaimed: true } : item))
+    );
+
+    setHero((prev) => ({
+      ...prev,
+      coins: prev.coins + q.rewardGold,
+      manaCrystals: prev.manaCrystals + q.rewardCrystals,
+    }));
+
+    if (q.rewardItems) {
+      setInventory((prev) => {
+        const nextPotions = { ...prev.potions };
+        const nextMaterials = { ...prev.materials };
+
+        (Object.keys(q.rewardItems || {}) as Array<keyof Inventory['potions'] | keyof Inventory['materials']>).forEach((key) => {
+          const val = (q.rewardItems as any)[key] || 0;
+          if (key in nextPotions) {
+            (nextPotions as any)[key] = ((nextPotions as any)[key] || 0) + val;
+          } else if (key in nextMaterials) {
+            (nextMaterials as any)[key] = ((nextMaterials as any)[key] || 0) + val;
+          }
+        });
+
+        return {
+          ...prev,
+          potions: nextPotions,
+          materials: nextMaterials,
+        };
+      });
+    }
+
+    addExp(q.rewardExp);
+    addToast('📜 รับรางวัลเควสต์สำเร็จ!', `+${q.rewardGold} 🪙, +${q.rewardCrystals} 💎, +${q.rewardExp} EXP`, 'achievement');
+  };
+
+  // Farming Actions
   const handlePlantSeed = (plotId: number, cropId: string) => {
-    if ((inventory.seeds[cropId] || 0) <= 0) return;
+    if ((inventory.seeds[cropId] || 0) <= 0) {
+      addToast('เมล็ดพันธุ์หมด!', 'แวะซื้อเมล็ดที่ร้านค้าหรือรับจากเควสต์', 'warning');
+      return;
+    }
 
     sounds.playPlant();
     setInventory((prev) => ({
@@ -349,29 +864,22 @@ export default function App() {
       )
     );
 
-    updateMissionProgress('plant_crop', 1);
-    addToast('🌱 เพาะเมล็ดพันธุ์สำเร็จ!', `ปลูก ${CROPS_DATA[cropId]?.name} เรียบร้อยแล้ว`);
+    updateQuestProgress('farm', 1);
+    addToast('🌱 หยอดเมล็ดพันธุ์สำเร็จ!', `ปลูก ${CROPS_DATA[cropId]?.name} ในแปลงที่ ${plotId + 1}`);
   };
 
   const handleWaterPlot = (plotId: number) => {
     if (inventory.waterBuckets <= 0) {
-      addToast('💧 น้ำหมดแล้ว!', 'ไปที่มินิเกมเพื่อจับหยดน้ำหรือตอบควิซเติมน้ำ', 'warning');
+      addToast('💧 น้ำหมด!', 'เล่นมินิเกมสายฝนหรือตอบควิซเพื่อรับน้ำเพิ่ม', 'warning');
       return;
     }
 
     sounds.playWater();
     setInventory((prev) => ({ ...prev, waterBuckets: prev.waterBuckets - 1 }));
-
     setPlots((prev) =>
-      prev.map((plot) =>
-        plot.id === plotId
-          ? { ...plot, waterLevel: Math.min(100, plot.waterLevel + 50) }
-          : plot
-      )
+      prev.map((p) => (p.id === plotId ? { ...p, waterLevel: Math.min(100, p.waterLevel + 50) } : p))
     );
-
-    updateMissionProgress('water_crop', 1);
-    addToast('💧 รดน้ำเรียบร้อย!', 'ความชื้นในดินเพิ่มขึ้นเต็มที่');
+    addToast('💧 รดน้ำเรียบร้อย!', 'ดินชุ่มชื้นพร้อมเร่งการสังเคราะห์แสง');
   };
 
   const handleFertilizePlot = (plotId: number, fertilizerType: 'organic' | 'N' | 'P' | 'K') => {
@@ -385,41 +893,16 @@ export default function App() {
         : 'fertilizerK';
 
     if (inventory[key] <= 0) {
-      addToast('🧪 ปุ๋ยไม่เพียงพอ!', 'เล่นแล็บผสมปุ๋ยคณิตศาสตร์เพื่อปรุงปุ๋ยใหม่', 'warning');
+      addToast('🧪 ปุ๋ยไม่พอ!', 'เล่นมินิเกมแล็บสูตรปุ๋ยเพื่อผสมปุ๋ยใหม่', 'warning');
       return;
     }
 
     sounds.playPop();
     setInventory((prev) => ({ ...prev, [key]: prev[key] - 1 }));
-
     setPlots((prev) =>
-      prev.map((plot) =>
-        plot.id === plotId
-          ? { ...plot, fertilizerLevel: Math.min(100, plot.fertilizerLevel + 50) }
-          : plot
-      )
+      prev.map((p) => (p.id === plotId ? { ...p, fertilizerLevel: Math.min(100, p.fertilizerLevel + 50) } : p))
     );
-
-    updateMissionProgress('fertilize_crop', 1);
-    addToast('🧪 บำรุงปุ๋ยสำเร็จ!', `ใส่ปุ๋ย ${fertilizerType} เร่งการเจริญเติบโต x1.5`);
-  };
-
-  const handleSprayPest = (plotId: number) => {
-    if (inventory.pestSprays <= 0) {
-      addToast('🧴 สเปรย์หมด!', 'เล่นมินิเกมผู้พิทักษ์แปลงผักเพื่อรับสเปรย์ชีวภาพ', 'warning');
-      return;
-    }
-
-    sounds.playPop();
-    setInventory((prev) => ({ ...prev, pestSprays: prev.pestSprays - 1 }));
-
-    setPlots((prev) =>
-      prev.map((plot) => (plot.id === plotId ? { ...plot, hasPest: false } : plot))
-    );
-
-    setStats((prev) => ({ ...prev, totalPestsCleared: prev.totalPestsCleared + 1 }));
-    updateBadgeProgress('pest_defender', 1);
-    addToast('🛡️ กำจัดศัตรูพืชสำเร็จ!', 'แปลงผักกลับมาปลอดภัยและแข็งแรง');
+    addToast('🧪 ใส่ปุ๋ยสำเร็จ!', `ใส่ปุ๋ย ${fertilizerType} เร่งการเจริญเติบโต`);
   };
 
   const handleHarvestPlot = (plotId: number) => {
@@ -430,9 +913,8 @@ export default function App() {
     if (!crop) return;
 
     sounds.playHarvest();
-    confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 } });
+    confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
 
-    // Update inventory
     setInventory((prev) => ({
       ...prev,
       harvested: {
@@ -441,7 +923,6 @@ export default function App() {
       },
     }));
 
-    // Reset plot to empty
     setPlots((prev) =>
       prev.map((p) =>
         p.id === plotId
@@ -459,145 +940,41 @@ export default function App() {
       )
     );
 
-    // Stats & EXP
-    setStats((prev) => ({
+    setHero((prev) => ({
       ...prev,
       totalHarvests: prev.totalHarvests + 1,
       coins: prev.coins + crop.sellPrice,
     }));
+
     addExp(crop.expReward);
-
-    updateMissionProgress('harvest_crop', 1);
-    updateBadgeProgress('master_harvester', 1);
-
-    addToast(
-      `🌾 เก็บเกี่ยว ${crop.name} สำเร็จ!`,
-      `ได้รับ ${crop.sellPrice} 🪙 และ +${crop.expReward} EXP`,
-      'achievement'
-    );
+    updateQuestProgress('harvest', 1);
+    addToast(`🌾 เก็บเกี่ยว ${crop.name}!`, `ได้รับ ${crop.sellPrice} 🪙 และ +${crop.expReward} EXP`, 'achievement');
   };
 
-  // 4. Mission Claim Reward
-  const handleClaimMissionReward = (missionId: string) => {
-    const mission = missions.find((m) => m.id === missionId);
-    if (!mission || !mission.isCompleted || mission.isClaimed) return;
-
-    // Apply items
-    if (mission.rewardItems) {
-      setInventory((prev) => {
-        const nextSeeds = { ...prev.seeds };
-        if (mission.rewardItems?.seeds) {
-          Object.entries(mission.rewardItems.seeds).forEach(([cid, count]) => {
-            nextSeeds[cid] = (nextSeeds[cid] || 0) + count;
-          });
-        }
-        return {
-          ...prev,
-          seeds: nextSeeds,
-          waterBuckets: prev.waterBuckets + (mission.rewardItems?.waterBuckets || 0),
-          fertilizerOrganic: prev.fertilizerOrganic + (mission.rewardItems?.fertilizerOrganic || 0),
-          fertilizerN: prev.fertilizerN + (mission.rewardItems?.fertilizerN || 0),
-          fertilizerP: prev.fertilizerP + (mission.rewardItems?.fertilizerP || 0),
-          fertilizerK: prev.fertilizerK + (mission.rewardItems?.fertilizerK || 0),
-          pestSprays: prev.pestSprays + (mission.rewardItems?.pestSprays || 0),
-        };
-      });
+  const handleSprayPest = (plotId: number) => {
+    if (inventory.pestSprays <= 0) {
+      addToast('🧴 สเปรย์หมด!', 'เล่นมินิเกมผู้พิทักษ์แปลงผักเพื่อรับสเปรย์ชีวภาพ', 'warning');
+      return;
     }
 
-    setStats((prev) => ({ ...prev, coins: prev.coins + mission.rewardCoins }));
-    addExp(mission.rewardExp);
+    sounds.playPop();
+    setInventory((prev) => ({ ...prev, pestSprays: prev.pestSprays - 1 }));
+    setPlots((prev) => prev.map((p) => (p.id === plotId ? { ...p, hasPest: false } : p)));
+    addToast('🛡️ กำจัดศัตรูพืชสำเร็จ!', 'แปลงผักปลอดภัยแล้ว');
+  };
 
-    setMissions((prev) =>
-      prev.map((m) => (m.id === missionId ? { ...m, isClaimed: true } : m))
+  const handleTillPlot = (plotId: number) => {
+    sounds.playPop();
+    setPlots((prev) =>
+      prev.map((p) => (p.id === plotId ? { ...p, isTilled: true } : p))
     );
-
-    addToast(
-      '🎁 รับรางวัลภารกิจเรียบร้อย!',
-      `+${mission.rewardExp} EXP & +${mission.rewardCoins} 🪙`,
-      'achievement'
-    );
+    addToast('⛏️ พรวนดินสำเร็จ!', 'ดินร่วนซุย เพิ่มอัตราการโต +25%');
   };
 
-  // 5. Mini-Game Reward Callbacks
-  const handleCollectWater = (water: number, coins: number, exp: number) => {
-    setInventory((prev) => ({ ...prev, waterBuckets: prev.waterBuckets + water }));
-    setStats((prev) => ({
-      ...prev,
-      coins: prev.coins + coins,
-      totalWaterCollected: prev.totalWaterCollected + water,
-    }));
-    addExp(exp);
-
-    updateMissionProgress('collect_water', water);
-    updateBadgeProgress('water_keeper', water);
-    addToast('💧 กักเก็บน้ำสำเร็จ!', `ได้รับน้ำ ${water} ถัง, ${coins} 🪙, +${exp} EXP`);
-  };
-
-  const handleQuizReward = (reward: {
-    water: number;
-    fertilizerN: number;
-    fertilizerP: number;
-    fertilizerK: number;
-    exp: number;
-    coins: number;
-  }) => {
-    setInventory((prev) => ({
-      ...prev,
-      waterBuckets: prev.waterBuckets + reward.water,
-      fertilizerN: prev.fertilizerN + reward.fertilizerN,
-      fertilizerP: prev.fertilizerP + reward.fertilizerP,
-      fertilizerK: prev.fertilizerK + reward.fertilizerK,
-    }));
-    setStats((prev) => ({
-      ...prev,
-      coins: prev.coins + reward.coins,
-      totalQuizzesCorrect: prev.totalQuizzesCorrect + 1,
-    }));
-    addExp(reward.exp);
-
-    updateMissionProgress('answer_quiz', 1);
-    updateBadgeProgress('green_scholar', 1);
-    addToast('🧠 ควิซเสร็จสิ้น!', `รับปุ๋ย NPK, น้ำ และ EXP ครบถ้วน!`, 'achievement');
-  };
-
-  const handleMathReward = (reward: {
-    fertilizerOrganic: number;
-    fertilizerN: number;
-    fertilizerP: number;
-    fertilizerK: number;
-    exp: number;
-    coins: number;
-  }) => {
-    setInventory((prev) => ({
-      ...prev,
-      fertilizerOrganic: prev.fertilizerOrganic + reward.fertilizerOrganic,
-      fertilizerN: prev.fertilizerN + reward.fertilizerN,
-      fertilizerP: prev.fertilizerP + reward.fertilizerP,
-      fertilizerK: prev.fertilizerK + reward.fertilizerK,
-    }));
-    setStats((prev) => ({
-      ...prev,
-      coins: prev.coins + reward.coins,
-      totalFertilizersCrafted: prev.totalFertilizersCrafted + 1,
-    }));
-    addExp(reward.exp);
-
-    updateMissionProgress('solve_math', 1);
-    updateBadgeProgress('fertilizer_chemist', 1);
-    addToast('🧪 สังเคราะห์ปุ๋ยสำเร็จ!', 'ได้รับปุ๋ยคุณภาพสูงนำไปบำรุงแปลงเกษตร');
-  };
-
-  const handlePestReward = (reward: { pestSprays: number; exp: number; coins: number }) => {
-    setInventory((prev) => ({ ...prev, pestSprays: prev.pestSprays + reward.pestSprays }));
-    setStats((prev) => ({ ...prev, coins: prev.coins + reward.coins }));
-    addExp(reward.exp);
-    addToast('🛡️ ภารกิจลาดตระเวนสำเร็จ!', `ได้รับสเปรย์ชีวภาพ +${reward.pestSprays} ขวด`);
-  };
-
-  // 6. Shop Handlers
+  // Shop Handlers
   const handleBuySeed = (cropId: string, count: number, totalCost: number) => {
-    if (stats.coins < totalCost) return;
-    setStats((prev) => ({ ...prev, coins: prev.coins - totalCost }));
+    if (hero.coins < totalCost) return;
+    setHero((prev) => ({ ...prev, coins: prev.coins - totalCost }));
     setInventory((prev) => ({
       ...prev,
       seeds: {
@@ -605,7 +982,7 @@ export default function App() {
         [cropId]: (prev.seeds[cropId] || 0) + count,
       },
     }));
-    addToast('🛒 ซื้อเมล็ดพันธุ์สำเร็จ', `ซื้อ ${CROPS_DATA[cropId]?.name} x${count} ซอง`);
+    addToast('🛒 ซื้อเมล็ดสำเร็จ!', `ซื้อ ${CROPS_DATA[cropId]?.name} x${count} ซอง`);
   };
 
   const handleSellHarvest = (cropId: string, count: number, totalEarnings: number) => {
@@ -616,20 +993,20 @@ export default function App() {
         [cropId]: Math.max(0, (prev.harvested[cropId] || 0) - count),
       },
     }));
-    setStats((prev) => ({ ...prev, coins: prev.coins + totalEarnings }));
+    setHero((prev) => ({ ...prev, coins: prev.coins + totalEarnings }));
     addToast('💰 ขายผลผลิตสำเร็จ!', `ได้รับเหรียญทอง +${totalEarnings} 🪙`);
   };
 
   const handleBuyWater = (count: number, cost: number) => {
-    if (stats.coins < cost) return;
-    setStats((prev) => ({ ...prev, coins: prev.coins - cost }));
+    if (hero.coins < cost) return;
+    setHero((prev) => ({ ...prev, coins: prev.coins - cost }));
     setInventory((prev) => ({ ...prev, waterBuckets: prev.waterBuckets + count }));
     addToast('💧 ซื้อน้ำสำเร็จ', `ได้รับน้ำ +${count} ถัง`);
   };
 
   const handleBuyFertilizer = (type: 'organic' | 'N' | 'P' | 'K', cost: number) => {
-    if (stats.coins < cost) return;
-    setStats((prev) => ({ ...prev, coins: prev.coins - cost }));
+    if (hero.coins < cost) return;
+    setHero((prev) => ({ ...prev, coins: prev.coins - cost }));
     const key =
       type === 'organic'
         ? 'fertilizerOrganic'
@@ -643,102 +1020,130 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-emerald-200">
-      {/* Top Header Status */}
+    <div className="min-h-screen bg-stone-100 text-stone-900 flex flex-col font-sans selection:bg-emerald-200 relative overflow-x-hidden">
+      {/* Immersive Weather & Atmospheric FX Overlay */}
+      <WeatherOverlay weather={currentWeather} time={inGameTime} />
+
+      {/* RPG Top Navigation & Character Status Header */}
       <Header
-        stats={stats}
+        hero={hero}
         inventory={inventory}
+        weather={currentWeather}
+        time={inGameTime}
+        onSetWeather={handleSetWeather}
         isMuted={isMuted}
         onToggleMute={() => {
           setIsMuted(!isMuted);
           sounds.isMuted = !isMuted;
         }}
         onOpenHelp={() => setShowHelpModal(true)}
+        onOpenWorldMap={() => setActiveTab('world_map')}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 pb-24">
-        {/* Step-by-Step Guided Mission Tracker */}
-        <MissionTracker
-          missions={missions}
-          onClaimReward={handleClaimMissionReward}
-          onNavigateToTab={setActiveTab}
-        />
-
-        {/* Tab 1: Farming Field (หน้าแปลงเกษตร) */}
-        {activeTab === 'farm' && (
-          <div className="space-y-4">
-            {/* Field Banner */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-black text-base sm:text-lg text-stone-950 flex items-center gap-2 tracking-tight uppercase">
-                  <Sprout className="w-5 h-5 text-emerald-700 stroke-[2.5]" />
-                  แปลงเกษตรอินทรีย์อัจฉริยะ
-                </h2>
-                <p className="text-xs font-medium text-stone-600 mt-0.5">
-                  แตะที่แปลงเพื่อหยอดเมล็ด หรือดูแลด้วยน้ำและปุ๋ยจนครบ 4 ระยะ
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-goto-minigames"
-                  onClick={() => {
-                    sounds.playPop();
-                    setActiveTab('minigames');
-                  }}
-                  className="cursor-pointer bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-black text-xs px-3.5 py-2 rounded-xl border border-sky-800 shadow-xs transition-all flex items-center gap-1.5"
-                >
-                  <Gamepad2 className="w-4 h-4" />
-                  <span>เล่นมินิเกมเก็บน้ำ/ปุ๋ย</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Farm Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-4">
-              {plots.map((plot) => (
-                <FarmPlotCard
-                  key={plot.id}
-                  plot={plot}
-                  playerLevel={stats.level}
-                  inventory={inventory}
-                  onSelectPlot={(p) => setSelectedPlot(p)}
-                  onQuickWater={handleWaterPlot}
-                  onQuickFertilize={(id) => handleFertilizePlot(id, 'organic')}
-                  onQuickHarvest={handleHarvestPlot}
-                  onQuickSpray={handleSprayPest}
-                />
-              ))}
-            </div>
-          </div>
+      {/* Main RPG Content Area */}
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 pb-24 space-y-4 relative z-10">
+        {/* World Map View */}
+        {activeTab === 'world_map' && (
+          <WorldMapView
+            stats={hero}
+            onSelectLocation={handleSelectLocation}
+            onStartBattle={handleStartBattle}
+            onEnterDungeon={handleEnterDungeon}
+            onOpenQuests={() => setActiveTab('quests')}
+            onOpenCamp={() => setActiveTab('camp')}
+          />
         )}
 
-        {/* Tab 2: Mini-Games & Edutainment Quiz */}
-        {activeTab === 'minigames' && (
-          <MiniGamesHub
-            onCollectWater={handleCollectWater}
-            onQuizReward={handleQuizReward}
-            onQuizCorrect={() => {
-              updateMissionProgress('answer_quiz', 1);
-              updateBadgeProgress('green_scholar', 1);
-            }}
-            onMathReward={handleMathReward}
-            onSolveMath={() => {
-              updateMissionProgress('solve_math', 1);
-              updateBadgeProgress('fertilizer_chemist', 1);
-            }}
-            onPestReward={handlePestReward}
-            onPestCleared={() => {
-              updateBadgeProgress('pest_defender', 1);
+        {/* Camp & Magic Farm View */}
+        {activeTab === 'camp' && (
+          <CampView
+            hero={hero}
+            inventory={inventory}
+            plots={plots}
+            weather={currentWeather}
+            time={inGameTime}
+            onSetWeather={handleSetWeather}
+            onSelectPlot={(p) => setSelectedPlot(p)}
+            onQuickWater={handleWaterPlot}
+            onQuickFertilize={(id) => handleFertilizePlot(id, 'organic')}
+            onQuickHarvest={handleHarvestPlot}
+            onQuickSpray={handleSprayPest}
+            onTillPlot={handleTillPlot}
+            onRestInBed={handleRestInBed}
+            onUpgradeCamp={handleUpgradeCamp}
+            onOpenShop={() => setActiveTab('shop')}
+            onOpenAlchemy={() => setActiveTab('alchemy')}
+            onOpenWorldMap={() => setActiveTab('world_map')}
+          />
+        )}
+
+        {/* Combat Battle View */}
+        {activeTab === 'battle' && (
+          <BattleView
+            monsterId={selectedMonsterId}
+            hero={hero}
+            inventory={inventory}
+            onUpdateHeroHp={(newHp) => setHero((prev) => ({ ...prev, hp: newHp }))}
+            onVictoryRewards={handleBattleVictory}
+            onUsePotion={handleUsePotion}
+            onBackToMap={() => setActiveTab('world_map')}
+            onOpenCampToHeal={() => setActiveTab('camp')}
+          />
+        )}
+
+        {/* Dungeon Puzzle View */}
+        {activeTab === 'dungeon' && (
+          <DungeonPuzzleView
+            dungeonId={selectedDungeonId}
+            hero={hero}
+            onDungeonCleared={handleDungeonCleared}
+            onBackToMap={() => setActiveTab('world_map')}
+          />
+        )}
+
+        {/* Alchemy Lab View */}
+        {activeTab === 'alchemy' && (
+          <AlchemyView
+            hero={hero}
+            inventory={inventory}
+            onCraftRecipe={handleCraftRecipe}
+          />
+        )}
+
+        {/* Adventurer Quest Guild View */}
+        {activeTab === 'quests' && (
+          <QuestGuildView
+            quests={quests}
+            hero={hero}
+            onClaimQuest={handleClaimQuest}
+            onNavigateToTask={(taskType) => {
+              if (taskType === 'battle') setActiveTab('world_map');
+              else if (taskType === 'dungeon') setActiveTab('world_map');
+              else if (taskType === 'alchemy') setActiveTab('alchemy');
+              else if (taskType === 'farm' || taskType === 'harvest') setActiveTab('camp');
+              else setActiveTab('world_map');
             }}
           />
         )}
 
-        {/* Tab 3: Shop & Market */}
+        {/* Lore Codex & Cards View */}
+        {activeTab === 'codex' && (
+          <CodexView
+            hero={hero}
+            onAnswerQuizReward={(rewardType, amount) => {
+              if (rewardType === 'exp') addExp(amount);
+              else if (rewardType === 'water') setInventory((p) => ({ ...p, waterBuckets: p.waterBuckets + amount }));
+              else if (rewardType === 'crystals') setHero((p) => ({ ...p, manaCrystals: p.manaCrystals + amount }));
+              else if (rewardType === 'fertilizer') setInventory((p) => ({ ...p, fertilizerN: p.fertilizerN + amount, fertilizerP: p.fertilizerP + amount, fertilizerK: p.fertilizerK + amount }));
+              addToast('🧠 ตอบถูก!', `ได้รับรางวัล +${amount} ${rewardType}`, 'achievement');
+            }}
+          />
+        )}
+
+        {/* Shop Market View */}
         {activeTab === 'shop' && (
           <ShopView
-            stats={stats}
+            stats={hero}
             inventory={inventory}
             onBuySeed={handleBuySeed}
             onSellHarvest={handleSellHarvest}
@@ -747,52 +1152,92 @@ export default function App() {
           />
         )}
 
-        {/* Tab 4: Farmpedia Encyclopedia */}
-        {activeTab === 'encyclopedia' && <EncyclopediaView />}
-
-        {/* Tab 5: Badges & Leaderboard */}
-        {activeTab === 'badges' && <BadgesView badges={badges} stats={stats} />}
+        {/* Mini-Games Hub */}
+        {activeTab === 'minigames' && (
+          <MiniGamesHub
+            onCollectWater={(w, c, e) => {
+              setInventory((prev) => ({ ...prev, waterBuckets: prev.waterBuckets + w }));
+              setHero((prev) => ({ ...prev, coins: prev.coins + c }));
+              addExp(e);
+              addToast('💧 กักเก็บน้ำสำเร็จ!', `+${w} ถังน้ำ, +${c} 🪙, +${e} EXP`);
+            }}
+            onQuizReward={(reward) => {
+              setInventory((prev) => ({
+                ...prev,
+                waterBuckets: prev.waterBuckets + reward.water,
+                fertilizerN: prev.fertilizerN + reward.fertilizerN,
+                fertilizerP: prev.fertilizerP + reward.fertilizerP,
+                fertilizerK: prev.fertilizerK + reward.fertilizerK,
+              }));
+              setHero((prev) => ({ ...prev, coins: prev.coins + reward.coins }));
+              addExp(reward.exp);
+              addToast('🧠 ควิซสำเร็จ!', `รับปุ๋ย NPK, น้ำ และ EXP ครบถ้วน!`, 'achievement');
+            }}
+            onQuizCorrect={() => {}}
+            onMathReward={(reward) => {
+              setInventory((prev) => ({
+                ...prev,
+                fertilizerOrganic: prev.fertilizerOrganic + reward.fertilizerOrganic,
+                fertilizerN: prev.fertilizerN + reward.fertilizerN,
+                fertilizerP: prev.fertilizerP + reward.fertilizerP,
+                fertilizerK: prev.fertilizerK + reward.fertilizerK,
+              }));
+              setHero((prev) => ({ ...prev, coins: prev.coins + reward.coins }));
+              addExp(reward.exp);
+              addToast('🧪 สังเคราะห์ปุ๋ยสำเร็จ!', 'ได้รับปุ๋ยคุณภาพสูงนำไปบำรุงแปลงเกษตร');
+            }}
+            onSolveMath={() => {}}
+            onPestReward={(reward) => {
+              setInventory((prev) => ({ ...prev, pestSprays: prev.pestSprays + reward.pestSprays }));
+              setHero((prev) => ({ ...prev, coins: prev.coins + reward.coins }));
+              addExp(reward.exp);
+              addToast('🛡️ ภารกิจลาดตระเวนสำเร็จ!', `ได้รับสเปรย์ชีวภาพ +${reward.pestSprays} ขวด`);
+            }}
+            onPestCleared={() => {}}
+          />
+        )}
       </main>
 
-      {/* Bottom Floating Navigation Bar (Mobile-First Touch Friendly) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-stone-900/15 py-1.5 px-3 shadow-lg">
-        <div className="max-w-lg mx-auto grid grid-cols-5 gap-1.5 text-center">
+      {/* RPG Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-stone-900 py-1.5 px-3 shadow-[0_-4px_10px_rgba(0,0,0,0.06)]">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-1 overflow-x-auto">
           {[
-            { id: 'farm', label: 'แปลงผัก', icon: Sprout, emoji: '🌱' },
+            { id: 'camp', label: 'แคมป์/ฟาร์ม', icon: Home, emoji: '🏕️' },
+            { id: 'world_map', label: 'แผนที่โลก', icon: Map, emoji: '🗺️' },
+            { id: 'quests', label: 'กิลด์เควสต์', icon: Scroll, emoji: '📜' },
+            { id: 'alchemy', label: 'ห้องปรุงยา', icon: FlaskConical, emoji: '🧪' },
+            { id: 'codex', label: 'การ์ดความรู้', icon: BookOpen, emoji: '📚' },
+            { id: 'shop', label: 'ร้านค้า', icon: ShoppingBag, emoji: '🏪' },
             { id: 'minigames', label: 'มินิเกม', icon: Gamepad2, emoji: '🎮' },
-            { id: 'shop', label: 'ร้านค้า', icon: Store, emoji: '🏪' },
-            { id: 'encyclopedia', label: 'ความรู้', icon: BookOpen, emoji: '📚' },
-            { id: 'badges', label: 'เหรียญตรา', icon: Award, emoji: '🏆' },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
-
             return (
               <button
                 key={tab.id}
-                id={`tab-btn-${tab.id}`}
                 onClick={() => {
                   sounds.playPop();
                   setActiveTab(tab.id as ActiveTab);
                 }}
-                className={`cursor-pointer flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+                className={`cursor-pointer flex flex-col items-center justify-center py-1 px-2 sm:px-3 rounded-2xl transition-all shrink-0 ${
                   isActive
-                    ? 'text-stone-950 font-black bg-emerald-100 border-2 border-stone-900 shadow-xs'
-                    : 'text-stone-600 hover:text-stone-950 font-bold border border-transparent'
+                    ? 'text-stone-950 font-black bg-amber-400 border-2 border-stone-900 shadow-[0_2px_0_0_rgba(28,25,23,1)] scale-105'
+                    : 'text-stone-600 hover:text-stone-950 font-bold border-2 border-transparent'
                 }`}
               >
-                <span className="text-lg leading-none">{tab.emoji}</span>
-                <span className="text-[10px] mt-0.5 tracking-tight font-black">{tab.label}</span>
+                <span className="text-base sm:text-lg leading-none">{tab.emoji}</span>
+                <span className="text-[9px] sm:text-[10px] mt-0.5 tracking-tight font-black whitespace-nowrap">
+                  {tab.label}
+                </span>
               </button>
             );
           })}
         </div>
       </nav>
 
-      {/* Modals */}
+      {/* Modals & Overlays */}
       <PlotModal
         plot={selectedPlot}
-        playerLevel={stats.level}
+        playerLevel={hero.level}
         inventory={inventory}
         onClose={() => setSelectedPlot(null)}
         onPlantSeed={handlePlantSeed}
@@ -821,3 +1266,4 @@ export default function App() {
     </div>
   );
 }
+export default App;

@@ -1,16 +1,17 @@
 import React from 'react';
 import { CROPS_DATA } from '../data/gameData';
-import { Inventory, PlayerStats } from '../types';
+import { Inventory, HeroStats } from '../types';
 import { sounds } from '../utils/audio';
-import { ShoppingBag, Coins, Sparkles, Sprout, ArrowDownRight, ArrowUpRight, Lock } from 'lucide-react';
+import { ShoppingBag, Coins, Sparkles, Sprout, ArrowDownRight, ArrowUpRight, Lock, Heart, FlaskConical } from 'lucide-react';
 
 interface ShopViewProps {
-  stats: PlayerStats;
+  stats: HeroStats;
   inventory: Inventory;
   onBuySeed: (cropId: string, count: number, totalCost: number) => void;
   onSellHarvest: (cropId: string, count: number, totalEarnings: number) => void;
   onBuyWater: (count: number, cost: number) => void;
   onBuyFertilizer: (type: 'organic' | 'N' | 'P' | 'K', cost: number) => void;
+  onBuyPotion?: (potionType: keyof Inventory['potions'], cost: number) => void;
 }
 
 export const ShopView: React.FC<ShopViewProps> = ({
