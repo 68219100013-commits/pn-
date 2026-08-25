@@ -1,0 +1,6 @@
+{
+  "name": "EcoFarm: เกมเกษตรกรอัจฉริยะและการเรียนรู้",
+  "description": "เกมทำฟาร์มเพื่อการเรียนรู้ (Edutainment Farming Game) ปลูกพืช 4 ระยะ เล่นมินิเกมเก็บทรัพยากร ตอบคำถามวิทยาศาสตร์การเกษตร และสะสมเหรียญรางวัล",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
